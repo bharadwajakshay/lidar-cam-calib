@@ -512,7 +512,7 @@ bool Calib::load_SfM_data()
         return false;
     }
     if (!points_file)
-    {
+    { 
         std::string msg = "Unable to open " + points_path;
         ROS_ERROR_STREAM(msg.c_str());
         return false;
@@ -541,26 +541,40 @@ bool Calib::load_SfM_data()
             int width, height;
             std::stringstream word(line);
             word >> camera_id >> camera_type >> width >> height;
-            if (camera_type != "RADIAL")
-            {
-                std::string msg = "Camera type not supported.";
-                ROS_ERROR_STREAM(msg.c_str());
-                return false;                
-            }
-            if ((width != frames[0].image.cols) || (height != frames[0].image.rows))
-            {
-                std::string msg = "SfM image size is not consistent with loaded images.";
-                ROS_ERROR_STREAM(msg.c_str());
-                return false;                 
-            }
-            camera_model = camera_type;
             if (camera_type == "RADIAL")
             {
-                intrinsic_num = 5;
-            }
+                if ((width != frames[0].image.cols) || (height != frames[0].image.rows))
+                {
+                    std::string msg = "SfM image size is not consistent with loaded images.";
+                    ROS_ERROR_STREAM(msg.c_str());
+                    return false;                 
+                }
 
-            word >> Intrin_init[0] >> Intrin_init[2] >> Intrin_init[3] >> Intrin_init[4] >> Intrin_init[5];
-            Intrin_init[1] = Intrin_init[0];
+                camera_model = camera_type;
+
+                intrinsic_num = 5;
+
+                word >> Intrin_init[0] >> Intrin_init[2] >> Intrin_init[3] >> Intrin_init[4] >> Intrin_init[5];
+                Intrin_init[1] = Intrin_init[0];     
+            }
+            else if(camera_type == "OPENCV"){
+                if ((width != frames[0].image.cols) || (height != frames[0].image.rows))
+                {
+                    std::string msg = "SfM image size is not consistent with loaded images.";
+                    ROS_ERROR_STREAM(msg.c_str());
+                    return false;                 
+                }
+
+                camera_model = camera_type;
+                intrinsic_num = 8;
+
+                word >> Intrin_init[0] >> Intrin_init[1] >> Intrin_init[2] >> Intrin_init[3] >> Intrin_init[4] >> Intrin_init[5] >> Intrin_init[6] >> Intrin_init[7];  
+            }
+            else{
+                std::string msg = "Camera type not supported.";
+                ROS_ERROR_STREAM(msg.c_str());
+                return false; 
+            }
         }
     }
     cameras_file.close();

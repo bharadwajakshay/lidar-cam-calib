@@ -1,5 +1,5 @@
 <launch>
-  <param name="data_folder" value="/home/lli/data/data1" />
+  <param name="data_folder" value="/home/akshay/catkin_ws/rosbag/" />
   <node
     pkg = "joint_lidar_camera_calib"
     type = "calib"
