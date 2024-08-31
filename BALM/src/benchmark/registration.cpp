@@ -7,6 +7,10 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/common/transforms.h>
 
+#include <pcl/registration/icp.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/common/transforms.h>
+
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
@@ -251,6 +255,63 @@ void registerPointCloud(pcl::PointCloud<pcl::PointXYZ> & cloud1,
     }
 }
 
+// Added by Akshay to replace existing registration algorithm
+
+void addNormal(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,
+	       pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_with_normals
+)
+{
+  pcl::PointCloud<pcl::Normal>::Ptr normals ( new pcl::PointCloud<pcl::Normal> );
+
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr searchTree (new pcl::search::KdTree<pcl::PointXYZ>);
+  searchTree->setInputCloud ( cloud );
+
+  pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normalEstimator;
+  normalEstimator.setInputCloud ( cloud );
+  normalEstimator.setSearchMethod ( searchTree );
+  normalEstimator.setKSearch ( 15 );
+  normalEstimator.compute ( *normals );
+  
+  pcl::concatenateFields( *cloud, *normals, *cloud_with_normals );
+}
+
+
+void registerPointCloud(pcl::PointCloud<pcl::PointXYZ> & cloud1,
+                        pcl::PointCloud<pcl::PointXYZ> & cloud2,
+                        Eigen::Matrix3d & R, 
+                        Eigen::Vector3d & t){
+        
+        Eigen::Matrix3d R_init = Eigen::Matrix3d::Identity();
+        Eigen::Vector3d t_init;
+        t_init << 0.1, 0.1, 0.1;
+
+    // prepare could with normals
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_source_normals(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_target_normals(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+    pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr cloud_source_trans_normals(new pcl::PointCloud<pcl::PointXYZRGBNormal>());
+    
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_src (new  pcl::PointCloud<pcl::PointXYZ>());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_tgt (new  pcl::PointCloud<pcl::PointXYZ>());
+    pcl::copyPointCloud(cloud1,*cloud_src);
+    pcl::copyPointCloud(cloud2,*cloud_tgt);
+
+    addNormal( cloud_src, cloud_source_normals );
+    addNormal( cloud_tgt, cloud_target_normals );
+    
+    // addNormal( cloud_source_trans, cloud_source_trans_normals );
+    pcl::IterativeClosestPointWithNormals<pcl::PointXYZRGBNormal, pcl::PointXYZRGBNormal>::Ptr icp ( new pcl::IterativeClosestPointWithNormals<pcl::PointXYZRGBNormal, pcl::PointXYZRGBNormal> () );
+
+    icp->setMaximumIterations(100) ;
+    icp->setInputSource(cloud_source_normals);
+    icp->setInputTarget (cloud_target_normals);
+    icp->align(*cloud_source_trans_normals);
+    std::cout<<"ICP has "<<(icp->hasConverged()?"converged":"not converged")<<", score: "<<icp->getFitnessScore() << std::endl;
+    Eigen::Matrix4f tform = icp->getFinalTransformation();
+
+    R = tform.block<3,3>(0,0).cast<double>();
+    t = tform.block<3,1>(0,3).cast<double>();
+}
+
 int main(int argc, char * argv[])
 {
     ros::init(argc, argv, "registration");
@@ -306,8 +367,9 @@ int main(int argc, char * argv[])
     world_map = raw_pointclouds[0];
     for (int i = 1; i < data_num; ++i)
     {
-        registerPointCloud(downsampled_map, downsampled_pointclouds[i], 
-                           R, t, nn_number, incre_number, squareDistThre);
+        //registerPointCloud(downsampled_map, downsampled_pointclouds[i], 
+        //                   R, t, nn_number, incre_number, squareDistThre);
+        registerPointCloud(downsampled_map, downsampled_pointclouds[i], R, t);
         poses.push_back(std::pair<Eigen::Matrix3d, Eigen::Vector3d>(R, t));
         Eigen::Matrix4f T;
         T << float(R(0,0)), float(R(0,1)), float(R(0,2)), float(t[0]),
